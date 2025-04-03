@@ -31,9 +31,10 @@ class Lattice: public Device, SPIInterface {
 		bool program_flash(unsigned int offset, bool unprotect_flash);
 		bool Verify(std::vector<std::string> data, bool unlock = false,
 				uint32_t flash_area = 0);
-		bool dumpFlash(uint32_t base_addr, uint32_t len) override {
-			return SPIInterface::dump(base_addr, len);
-		}
+//		bool dumpFlash(uint32_t base_addr, uint32_t len) override {
+//			return SPIInterface::dump(base_addr, len);
+//		}
+		bool dumpFlash(uint32_t base_addr, uint32_t len) override;
 
 		/*!
 		 * \brief display SPI flash ID and status register
@@ -78,13 +79,14 @@ class Lattice: public Device, SPIInterface {
 		};
 
 		lattice_family_t _fpga_family;
-
+		int readfilesize;
 		int get_statusreg_size();
 
 		bool program_intFlash(ConfigBitstreamParser *_cbp);
 		bool program_extFlash(unsigned int offset, bool unprotect_flash);
 		bool wr_rd(uint8_t cmd, uint8_t *tx, int tx_len,
 				uint8_t *rx, int rx_len, bool verbose = false);
+		bool dump_intFlash(unsigned int offset, unsigned int file_size);
 		/*!
 		 * \brief move device to SPI access
 		 */

@@ -477,6 +477,76 @@ bool Lattice::program_mem()
 	return true;
 }
 
+bool Lattice::dump_intFlash(unsigned int offset, unsigned int file_size)
+{
+	uint8_t tx_buf[16], rx_buf[16];
+	ConfigBitstreamParser * theParser = new RawParser(_filename, false);
+
+	/* bypass */
+	wr_rd(0xff, NULL, 0, NULL, 0);
+
+	printInfo("Enable configuration: ", false);
+	if (!EnableISC(0x08)) {
+		printError("FAIL");
+		displayReadReg(readStatusReg());
+		return false;
+	} else {
+		printSuccess("DONE");
+	}
+
+	if (_fpga_family == MACHXO3D_FAMILY) {
+		return false;
+	} else {
+		wr_rd(RESET_CFG_ADDR, NULL, 0, NULL, 0);
+	}
+
+	_jtag->set_state(Jtag::RUN_TEST_IDLE);
+	_jtag->toggleClk(1000);
+
+	tx_buf[0] = REG_CFG_FLASH;
+	_jtag->shiftIR(tx_buf, NULL, 8, Jtag::PAUSE_IR);
+
+	FILE *_fd = fopen(_filename.c_str(), "wb");
+
+	memset(tx_buf, 0, 16);
+	bool failure = false;
+	ProgressBar progress("Dumping", file_size / 16, 50, _quiet);
+	for (size_t line = 0;  line < file_size / 16; line++) {
+		_jtag->set_state(Jtag::RUN_TEST_IDLE);
+		_jtag->toggleClk(2);
+		_jtag->shiftDR(tx_buf, rx_buf, 16*8, Jtag::PAUSE_DR);
+		for (size_t byte = 0; byte < 16; byte++) {
+			rx_buf[byte] = theParser->reverseByte(rx_buf[byte]);
+		}
+		fwrite (rx_buf, 16, 1, _fd);
+		progress.display(line);
+	}
+	fclose(_fd);
+
+	/* bypass */
+	wr_rd(0xff, NULL, 0, NULL, 0);
+	/* disable configuration mode */
+	printInfo("Disable configuration: ", false);
+	if (!DisableISC()) {
+		printError("FAIL");
+		displayReadReg(readStatusReg());
+		return false;
+	} else {
+		printSuccess("DONE");
+	}
+
+	/* bypass */
+	wr_rd(0xff, NULL, 0, NULL, 0);
+	_jtag->go_test_logic_reset();
+
+	if (failure)
+		progress.fail();
+	else
+		progress.done();
+
+	return !failure;
+}
+
 bool Lattice::program_intFlash(ConfigBitstreamParser *_cbp)
 {
 	uint64_t featuresRow;
@@ -885,6 +955,18 @@ void Lattice::program(unsigned int offset, bool unprotect_flash)
 		retval = program_mem();
 	if (!retval)
 		throw std::exception();
+}
+
+bool Lattice::dumpFlash(uint32_t base_addr, uint32_t len)
+{
+	bool retval = true;
+
+	retval = dump_intFlash (base_addr, len);
+
+	if (!retval)
+		throw std::exception();
+
+	return retval;
 }
 
 /* flash mode :
